@@ -1,0 +1,56 @@
+# ---- Build output ----
+.build/
+dist/
+DerivedData/
+*.o
+*.swiftmodule
+.swiftpm/
+
+# ---- macOS ----
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# ---- Xcode user data (if Xcode is ever used) ----
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+
+# ---- Editors ----
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---- Secrets & credentials: NEVER commit these ----
+# Signing identities / keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.der
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+
+# Generic secret files
+.env
+.env.*
+*.env
+secrets.*
+*.secret
+*.secrets
+credentials
+credentials.*
+*_rsa
+*_ed25519
+id_rsa*
+id_ed25519*
+**/Secrets.plist
+**/secrets.json
+
+# Local-only notes that may contain private paths
+.local/
+*.local

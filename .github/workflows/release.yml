@@ -1,0 +1,58 @@
+name: Build & Release
+
+# Push a tag like v1.0.0 to build MacHole.app and publish it as a release.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build MacHole.app
+        run: ./scripts/build-app.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
+
+      - name: Package MacHole.zip
+        run: |
+          cd dist
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "MacHole.app" "MacHole.zip"
+          shasum -a 256 MacHole.zip > MacHole.zip.sha256
+
+      - name: Publish release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MacHole ${{ github.ref_name }}"
+          files: |
+            dist/MacHole.zip
+            dist/MacHole.zip.sha256
+          generate_release_notes: true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacHole-${{ steps.version.outputs.version }}
+          path: dist/MacHole.zip
