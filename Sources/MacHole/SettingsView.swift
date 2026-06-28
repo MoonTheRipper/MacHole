@@ -17,6 +17,8 @@ struct SettingsView: View {
                 ))
                 Toggle("Only show apps that are currently playing", isOn: $state.showOnlyPlaying)
                 Toggle("Automatically re-apply routes when apps relaunch", isOn: $state.reapplyAutomatically)
+                Toggle("Show all audio processes (advanced)", isOn: $state.showAllProcesses)
+                    .help("Includes background helpers, system processes, and unnamed processes. Leave off for a clean list of real apps.")
             }
 
             Section("Active routes") {

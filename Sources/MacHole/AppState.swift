@@ -19,6 +19,9 @@ final class AppState: ObservableObject {
     @Published var showOnlyPlaying: Bool {
         didSet { defaults.set(showOnlyPlaying, forKey: Keys.showOnlyPlaying); refresh() }
     }
+    @Published var showAllProcesses: Bool {
+        didSet { defaults.set(showAllProcesses, forKey: Keys.showAllProcesses); refresh() }
+    }
     @Published var reapplyAutomatically: Bool {
         didSet { defaults.set(reapplyAutomatically, forKey: Keys.reapplyAutomatically) }
     }
@@ -29,6 +32,7 @@ final class AppState: ObservableObject {
     private enum Keys {
         static let assignments = "assignments"
         static let showOnlyPlaying = "showOnlyPlaying"
+        static let showAllProcesses = "showAllProcesses"
         static let reapplyAutomatically = "reapplyAutomatically"
     }
 
@@ -40,6 +44,7 @@ final class AppState: ObservableObject {
     private init() {
         assignments = defaults.dictionary(forKey: Keys.assignments) as? [String: String] ?? [:]
         showOnlyPlaying = defaults.object(forKey: Keys.showOnlyPlaying) as? Bool ?? false
+        showAllProcesses = defaults.object(forKey: Keys.showAllProcesses) as? Bool ?? false
         reapplyAutomatically = defaults.object(forKey: Keys.reapplyAutomatically) as? Bool ?? true
 
         refresh()
@@ -51,7 +56,7 @@ final class AppState: ObservableObject {
 
     func refresh() {
         devices = AudioDevices.allOutputDevices()
-        let all = AudioProcesses.all()
+        let all = AudioProcesses.all(includeAll: showAllProcesses)
         processes = showOnlyPlaying ? all.filter(\.isPlaying) : all
     }
 
@@ -100,7 +105,7 @@ final class AppState: ObservableObject {
     private func reapplySavedRoutes() {
         guard routingSupported, !assignments.isEmpty else { return }
         if #available(macOS 14.4, *) {
-            let live = AudioProcesses.all()
+            let live = AudioProcesses.all(includeAll: true)
             for proc in live {
                 guard let deviceUID = assignments[proc.routingKey],
                       AudioRouter.shared.activeDeviceUID(forKey: proc.routingKey) == nil,

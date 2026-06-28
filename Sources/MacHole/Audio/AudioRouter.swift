@@ -9,7 +9,7 @@ import os.log
 /// the IOProc, the aggregate device, and the process tap.
 @available(macOS 14.4, *)
 final class AudioRoute {
-    let processObjectID: AudioObjectID
+    let processObjectIDs: [AudioObjectID]
     let deviceUID: String
 
     private var tapID: AudioObjectID = 0
@@ -17,16 +17,20 @@ final class AudioRoute {
     private var ioProcID: AudioDeviceIOProcID?
     private let queue = DispatchQueue(label: "com.moontheripper.machole.route")
 
-    init(process: AudioObjectID, deviceUID: String) {
-        self.processObjectID = process
+    init(processes: [AudioObjectID], deviceUID: String) {
+        self.processObjectIDs = processes
         self.deviceUID = deviceUID
     }
 
     /// Creates the tap + aggregate and starts forwarding audio.
     func start() throws {
-        // 1. Tap the process. `mutedWhenTapped` silences it on its original
-        //    device only while we are actively redirecting it.
-        let description = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
+        guard !processObjectIDs.isEmpty else {
+            throw CA.Error(status: kAudio_ParamError, action: "create process tap (no audio processes)")
+        }
+
+        // 1. Tap the app's audio process(es). `mutedWhenTapped` silences them on
+        //    their original device only while we are actively redirecting.
+        let description = CATapDescription(stereoMixdownOfProcesses: processObjectIDs)
         description.name = "MacHole Tap"
         description.isPrivate = true
         description.muteBehavior = .mutedWhenTapped
@@ -84,7 +88,7 @@ final class AudioRoute {
             throw CA.Error(status: startStatus, action: "start aggregate device")
         }
 
-        CA.log.info("Route started: process \(self.processObjectID) -> \(self.deviceUID, privacy: .public)")
+        CA.log.info("Route started: \(self.processObjectIDs.count) process(es) -> \(self.deviceUID, privacy: .public)")
     }
 
     /// Copies each input buffer into the matching output buffer, clamped to the
@@ -129,7 +133,7 @@ final class AudioRoute {
             AudioHardwareDestroyProcessTap(tapID)
             tapID = 0
         }
-        CA.log.info("Route stopped: process \(self.processObjectID)")
+        CA.log.info("Route stopped: \(self.processObjectIDs.count) process(es)")
     }
 
     deinit { stop() }
@@ -153,7 +157,7 @@ final class AudioRouter {
     @discardableResult
     func route(process: AudioProcess, toDeviceUID deviceUID: String) -> String? {
         removeRoute(forKey: process.routingKey)
-        let route = AudioRoute(process: process.id, deviceUID: deviceUID)
+        let route = AudioRoute(processes: process.audioObjectIDs, deviceUID: deviceUID)
         do {
             try route.start()
             routes[process.routingKey] = route
