@@ -17,6 +17,8 @@ permissions:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: macos-15
     steps:
       - name: Checkout
@@ -56,3 +58,28 @@ jobs:
         with:
           name: MacHole-${{ steps.version.outputs.version }}
           path: dist/MacHole.zip
+
+  # Redeploy the website so it reflects the new release. (A release published by
+  # the Actions token doesn't itself trigger the pages workflow, so we do it here.)
+  deploy-site:
+    needs: build
+    if: github.event_name == 'push'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
