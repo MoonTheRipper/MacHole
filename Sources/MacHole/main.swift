@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
@@ -18,25 +19,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
+    private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
         setUpPopover()
         // Warm up shared state so observers and saved routes activate immediately.
         _ = AppState.shared
+
+        // Reflect active routing in the menu-bar icon.
+        AppState.shared.$assignments
+            .receive(on: RunLoop.main)
+            .sink { [weak self] assignments in
+                self?.updateStatusIcon(active: !assignments.isEmpty)
+            }
+            .store(in: &cancellables)
     }
 
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "waveform",
-                accessibilityDescription: "MacHole"
-            )
-            button.image?.isTemplate = true
             button.action = #selector(togglePopover)
             button.target = self
         }
+        updateStatusIcon(active: !AppState.shared.assignments.isEmpty)
+    }
+
+    /// A subtle filled icon when routes are active, an outline when idle.
+    private func updateStatusIcon(active: Bool) {
+        guard let button = statusItem?.button else { return }
+        let symbol = active ? "waveform.circle.fill" : "waveform"
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "MacHole")
+        image?.isTemplate = true
+        button.image = image
+        button.toolTip = active ? "MacHole — routing active" : "MacHole"
     }
 
     private func setUpPopover() {

@@ -142,15 +142,22 @@ private struct AppRow: View {
     @Binding var selection: String
     let systemDefaultTag: String
 
+    private var isRunning: Bool { !process.audioObjectIDs.isEmpty || process.isPlaying }
+
     var body: some View {
         HStack(spacing: 10) {
             icon
+                .opacity(isRunning ? 1 : 0.5)
             VStack(alignment: .leading, spacing: 1) {
                 Text(process.displayName)
                     .font(.system(size: 13))
                     .lineLimit(1)
                 if process.isPlaying {
                     Text("Playing")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                } else if !isRunning {
+                    Text("Not running · routed")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }

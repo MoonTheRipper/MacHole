@@ -1,0 +1,27 @@
+name: CI
+
+# Verifies the app still compiles and bundles on every push/PR to main.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Assemble app bundle
+        run: ./scripts/build-app.sh

@@ -80,6 +80,24 @@ MacHole runs entirely on your Mac. It does not collect, transmit, or store any
 audio, usage data, or personal information. It captures app audio **only** for
 the apps you explicitly route, and only to play them through the device you pick.
 
+## Notes & limitations
+
+- **Routed apps stay visible.** Once you route an app, it stays in the menu —
+  even after it stops playing — so you can always undo or change it. You can also
+  route an app that isn’t open yet; the choice applies the next time it plays.
+- **Unplugging a device** stops its routes cleanly, and reconnecting it restores
+  them automatically.
+- **Channels.** Stereo audio is mapped onto the first channels of multi-channel
+  interfaces. Per-channel custom mapping isn’t exposed yet.
+- **Sample rate.** Routing works best when the app and the destination device run
+  at the same sample rate; large mismatches are smoothed by drift compensation.
+- **Browser tabs.** Some browsers play audio from a helper process the system
+  re-parents away from the browser; in that case the audio may appear under the
+  helper rather than the browser name. Turn on **Show all audio processes** in
+  Settings if you need to find it.
+- **Signing.** Release builds are ad-hoc signed (no paid Developer ID), so macOS
+  asks you to confirm the first launch.
+
 ## Troubleshooting
 
 - **An app doesn’t appear in the list** — it has to be actively using audio.

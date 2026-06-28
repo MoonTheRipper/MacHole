@@ -13,6 +13,9 @@ final class AppState: ObservableObject {
     @Published private(set) var processes: [AudioProcess] = []
     /// App routing key -> chosen output device UID. Persisted across launches.
     @Published private(set) var assignments: [String: String] = [:]
+    /// App routing key -> display name, so routed apps that aren't running can
+    /// still be shown and managed.
+    @Published private(set) var assignmentNames: [String: String] = [:]
     @Published var lastError: String?
 
     // Advanced settings (persisted).
@@ -31,6 +34,7 @@ final class AppState: ObservableObject {
 
     private enum Keys {
         static let assignments = "assignments"
+        static let assignmentNames = "assignmentNames"
         static let showOnlyPlaying = "showOnlyPlaying"
         static let showAllProcesses = "showAllProcesses"
         static let reapplyAutomatically = "reapplyAutomatically"
@@ -43,6 +47,7 @@ final class AppState: ObservableObject {
 
     private init() {
         assignments = defaults.dictionary(forKey: Keys.assignments) as? [String: String] ?? [:]
+        assignmentNames = defaults.dictionary(forKey: Keys.assignmentNames) as? [String: String] ?? [:]
         showOnlyPlaying = defaults.object(forKey: Keys.showOnlyPlaying) as? Bool ?? false
         showAllProcesses = defaults.object(forKey: Keys.showAllProcesses) as? Bool ?? false
         reapplyAutomatically = defaults.object(forKey: Keys.reapplyAutomatically) as? Bool ?? true
@@ -57,7 +62,38 @@ final class AppState: ObservableObject {
     func refresh() {
         devices = AudioDevices.allOutputDevices()
         let all = AudioProcesses.all(includeAll: showAllProcesses)
-        processes = showOnlyPlaying ? all.filter(\.isPlaying) : all
+        var visible = showOnlyPlaying ? all.filter(\.isPlaying) : all
+
+        // Always surface apps you've routed, even when they aren't running right
+        // now, so you can see and undo the routing from the menu.
+        let presentKeys = Set(visible.map(\.routingKey))
+        let ghosts = assignments.keys
+            .filter { !presentKeys.contains($0) }
+            .map { key in
+                AudioProcess(
+                    id: key,
+                    pid: -1,
+                    bundleID: key.hasPrefix("proc:") ? "" : key,
+                    displayName: assignmentNames[key] ?? friendlyName(forKey: key),
+                    isPlaying: false,
+                    isRegularApp: false,
+                    audioObjectIDs: []
+                )
+            }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+
+        visible.append(contentsOf: ghosts)
+        processes = visible
+    }
+
+    /// True when the app has no live audio process backing it (routed but closed).
+    func isRunning(_ process: AudioProcess) -> Bool {
+        !process.audioObjectIDs.isEmpty || process.isPlaying
+    }
+
+    private func friendlyName(forKey key: String) -> String {
+        if key.hasPrefix("proc:") { return String(key.dropFirst("proc:".count)) }
+        return key.split(separator: ".").last.map(String.init) ?? key
     }
 
     var defaultDevice: AudioDevice? { AudioDevices.defaultOutputDevice() }
@@ -76,29 +112,40 @@ final class AppState: ObservableObject {
             return
         }
         if #available(macOS 14.4, *) {
+            let key = process.routingKey
             if let deviceUID {
-                if let message = AudioRouter.shared.route(process: process, toDeviceUID: deviceUID) {
+                if process.audioObjectIDs.isEmpty {
+                    // Not running yet — remember the choice and apply it when the
+                    // app next produces audio (handled by reapplySavedRoutes).
+                    AudioRouter.shared.removeRoute(forKey: key)
+                } else if let message = AudioRouter.shared.route(process: process, toDeviceUID: deviceUID) {
                     lastError = message
                     return
                 }
-                assignments[process.routingKey] = deviceUID
+                assignments[key] = deviceUID
+                assignmentNames[key] = process.displayName
             } else {
-                AudioRouter.shared.removeRoute(forKey: process.routingKey)
-                assignments.removeValue(forKey: process.routingKey)
+                AudioRouter.shared.removeRoute(forKey: key)
+                assignments.removeValue(forKey: key)
+                assignmentNames.removeValue(forKey: key)
             }
             lastError = nil
             persistAssignments()
+            refresh()
         }
     }
 
     func clearAll() {
         if #available(macOS 14.4, *) { AudioRouter.shared.removeAll() }
         assignments.removeAll()
+        assignmentNames.removeAll()
         persistAssignments()
+        refresh()
     }
 
     private func persistAssignments() {
         defaults.set(assignments, forKey: Keys.assignments)
+        defaults.set(assignmentNames, forKey: Keys.assignmentNames)
     }
 
     /// On launch (and when apps reappear), restore routes for known apps.
@@ -124,6 +171,7 @@ final class AppState: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.refresh()
+                self.pruneDeadRoutes()
                 if self.reapplyAutomatically { self.reapplySavedRoutes() }
             }
         }
@@ -140,8 +188,17 @@ final class AppState: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.refresh()
+                self.pruneDeadRoutes()
                 if self.reapplyAutomatically { self.reapplySavedRoutes() }
             }
+        }
+    }
+
+    /// Tears down routes whose destination device has gone away.
+    private func pruneDeadRoutes() {
+        guard routingSupported else { return }
+        if #available(macOS 14.4, *) {
+            AudioRouter.shared.dropRoutes(whereDeviceMissing: Set(devices.map(\.uid)))
         }
     }
 

@@ -91,14 +91,44 @@ final class AudioRoute {
         CA.log.info("Route started: \(self.processObjectIDs.count) process(es) -> \(self.deviceUID, privacy: .public)")
     }
 
-    /// Copies each input buffer into the matching output buffer, clamped to the
-    /// smaller byte size; any leftover output is silenced to avoid noise.
+    /// Forwards tapped audio into the output device's buffers.
+    ///
+    /// When both sides are a single interleaved buffer but have different channel
+    /// counts (e.g. a stereo tap feeding a multi-channel audio interface), we map
+    /// sample-by-sample so the audio lands on the right channels instead of being
+    /// byte-copied out of alignment. Matching formats take the plain byte-copy
+    /// path, so the common stereo→stereo case is unchanged.
     private static func forward(
         input: UnsafePointer<AudioBufferList>,
         to output: UnsafeMutablePointer<AudioBufferList>
     ) {
         let inList = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
         let outList = UnsafeMutableAudioBufferListPointer(output)
+
+        if inList.count == 1, outList.count == 1,
+           inList[0].mNumberChannels != outList[0].mNumberChannels,
+           inList[0].mNumberChannels > 0, outList[0].mNumberChannels > 0,
+           let src = inList[0].mData, let dst = outList[0].mData {
+            let inCh = Int(inList[0].mNumberChannels)
+            let outCh = Int(outList[0].mNumberChannels)
+            let bytesPerSample = MemoryLayout<Float>.size // Core Audio taps deliver 32-bit float
+            let inFrames = Int(inList[0].mDataByteSize) / (bytesPerSample * inCh)
+            let outFrames = Int(outList[0].mDataByteSize) / (bytesPerSample * outCh)
+            let frames = min(inFrames, outFrames)
+            if frames > 0 {
+                let srcF = src.assumingMemoryBound(to: Float.self)
+                let dstF = dst.assumingMemoryBound(to: Float.self)
+                let copyCh = min(inCh, outCh)
+                memset(dst, 0, Int(outList[0].mDataByteSize))
+                for frame in 0..<frames {
+                    for channel in 0..<copyCh {
+                        dstF[frame * outCh + channel] = srcF[frame * inCh + channel]
+                    }
+                }
+                return
+            }
+        }
+
         let pairs = min(inList.count, outList.count)
         for index in 0..<pairs {
             let src = inList[index]
@@ -164,7 +194,31 @@ final class AudioRouter {
             return nil
         } catch {
             CA.log.error("Failed to route \(process.displayName, privacy: .public): \(String(describing: error))")
-            return String(describing: error)
+            return friendlyMessage(for: error, app: process.displayName)
+        }
+    }
+
+    /// Turns a raw Core Audio failure into something a person can act on.
+    private func friendlyMessage(for error: Error, app: String) -> String {
+        let detail = String(describing: error)
+        if detail.contains("process tap") {
+            return "Couldn’t capture \(app)’s audio. If this keeps happening, allow MacHole under System Settings ▸ Privacy & Security ▸ Microphone, then try again."
+        }
+        if detail.contains("aggregate") || detail.contains("start") {
+            return "Couldn’t send \(app) to that device. It may be in use or disconnected — pick another device or reconnect it."
+        }
+        return "Couldn’t route \(app). \(detail)"
+    }
+
+    /// Stops any active route whose destination device is no longer present
+    /// (e.g. an interface was unplugged). The assignment is kept so the route is
+    /// restored automatically when the device comes back.
+    func dropRoutes(whereDeviceMissing existingUIDs: Set<String>) {
+        let dead = routes.filter { !existingUIDs.contains($0.value.deviceUID) }.map(\.key)
+        for key in dead {
+            routes[key]?.stop()
+            routes.removeValue(forKey: key)
+            CA.log.info("Dropped route for missing device, key=\(key, privacy: .public)")
         }
     }
 
