@@ -43,6 +43,8 @@ struct SettingsView: View {
             Section {
                 LabeledContent("Version", value: appVersion)
                 LabeledContent("Requires", value: "macOS 14.4 or later")
+                Link("Visit the MacHole website",
+                     destination: URL(string: "https://moontheripper.github.io/MacHole/")!)
                 Link("View MacHole on GitHub",
                      destination: URL(string: "https://github.com/MoonTheRipper/MacHole")!)
             } header: {
