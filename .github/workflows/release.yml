@@ -34,13 +34,14 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Build MacHole.app
-        run: ./scripts/build-app.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
+      - name: Build DMG installer
+        run: ./scripts/make-dmg.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
 
-      - name: Package MacHole.zip
+      - name: Package zip (alternative download)
         run: |
           cd dist
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent "MacHole.app" "MacHole.zip"
+          shasum -a 256 MacHole.dmg > MacHole.dmg.sha256
           shasum -a 256 MacHole.zip > MacHole.zip.sha256
 
       - name: Publish release
@@ -49,6 +50,8 @@ jobs:
         with:
           name: "MacHole ${{ github.ref_name }}"
           files: |
+            dist/MacHole.dmg
+            dist/MacHole.dmg.sha256
             dist/MacHole.zip
             dist/MacHole.zip.sha256
           generate_release_notes: true
@@ -57,4 +60,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MacHole-${{ steps.version.outputs.version }}
-          path: dist/MacHole.zip
+          path: dist/MacHole.dmg

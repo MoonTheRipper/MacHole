@@ -3,7 +3,7 @@
 
   var API_URL = "https://api.github.com/repos/MoonTheRipper/MacHole/releases/latest";
   var RELEASES_URL = "https://github.com/MoonTheRipper/MacHole/releases";
-  var ASSET_NAME = "MacHole.zip";
+  var PREFERRED_ASSETS = ["MacHole.dmg", "MacHole.zip"];
 
   var downloadBtn = document.getElementById("downloadBtn");
   var versionText = document.getElementById("versionText");
@@ -32,12 +32,14 @@
 
   function findDownloadUrl(release) {
     var assets = release.assets || [];
-    for (var i = 0; i < assets.length; i++) {
-      if (assets[i] && assets[i].name === ASSET_NAME && assets[i].browser_download_url) {
-        return assets[i].browser_download_url;
+    for (var p = 0; p < PREFERRED_ASSETS.length; p++) {
+      for (var i = 0; i < assets.length; i++) {
+        if (assets[i] && assets[i].name === PREFERRED_ASSETS[p] && assets[i].browser_download_url) {
+          return assets[i].browser_download_url;
+        }
       }
     }
-    return release.zipball_url || release.html_url || RELEASES_URL;
+    return release.html_url || RELEASES_URL;
   }
 
   function applyRelease(release) {

@@ -21,11 +21,14 @@ kernel extensions and nothing to install at the system level.
 
 ### Download
 
-1. Go to the [latest release](https://github.com/MoonTheRipper/MacHole/releases/latest).
-2. Download `MacHole.zip` and unzip it.
-3. Drag **MacHole.app** to your `Applications` folder.
-4. The app is ad-hoc signed, so the first time you open it, **right-click the
-   app and choose “Open”** (or run `xattr -dr com.apple.quarantine MacHole.app`).
+1. Go to the [latest release](https://github.com/MoonTheRipper/MacHole/releases/latest)
+   and download **`MacHole.dmg`**.
+2. Open the DMG and **drag MacHole onto the Applications folder**.
+3. Launch MacHole from Applications. Because it’s ad-hoc signed, the first time
+   you open it, **right-click the app and choose “Open”** (or run
+   `xattr -dr com.apple.quarantine /Applications/MacHole.app`).
+
+> Prefer a plain app? A zipped `MacHole.zip` is attached to each release too.
 
 ### Build from source
 
@@ -35,8 +38,11 @@ full Xcode install is not required):
 ```bash
 git clone git@github.com:MoonTheRipper/MacHole.git
 cd MacHole
-./scripts/build-app.sh
+./scripts/build-app.sh        # builds dist/MacHole.app
 open dist/MacHole.app
+
+# …or build the drag-and-drop installer:
+./scripts/make-dmg.sh         # builds dist/MacHole.dmg
 ```
 
 ## How to use
